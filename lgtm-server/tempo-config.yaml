@@ -26,7 +26,7 @@ ingester:
 
 compactor:
   compaction:
-    block_retention: 100d # Matches S3 lifecycle
+    block_retention: 2400h # 100 days — matches S3 lifecycle
   ring:
     kvstore:
       store: inmemory
@@ -39,7 +39,7 @@ storage:
       bucket: oneone-grafana-bucket
       region: ap-southeast-1 # Change to your region
       # IAM Instance Profile is used — no keys needed.
-      prefix: tempo-traces
+      prefix: tempotraces
     wal:
       path: /var/tempo/wal
     local:
@@ -69,5 +69,5 @@ overrides:
         - service-graphs
         - span-metrics
 
-analytics:
+usage_report:
   reporting_enabled: false
