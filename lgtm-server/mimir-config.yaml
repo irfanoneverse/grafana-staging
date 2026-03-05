@@ -68,5 +68,5 @@ memberlist:
   join_members:
     - localhost:7946
 
-analytics:
+usage_report:
   reporting_enabled: false
