@@ -39,7 +39,7 @@ store_gateway:
     replication_factor: 1
 
 blocks_storage:
-  storage_prefix: mimir-blocks
+  storage_prefix: mimirblocks
   tsdb:
     dir: /data/mimir/tsdb
   bucket_store:
