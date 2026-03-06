@@ -44,6 +44,7 @@ services:
       - /etc/alloy/config.alloy
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy/data
+      - --stability.level=community
     network_mode: host
     pid: host
     volumes:
