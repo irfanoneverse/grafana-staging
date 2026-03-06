@@ -495,11 +495,11 @@ curl -s http://127.0.0.1:9253/metrics | head -5
 From the LGTM server:
 
 ```bash
-# Query recent logs from this instance
-curl -s "http://localhost:3100/loki/api/v1/query?query={instance=%22laravel-app-1%22}&limit=5" | jq .
+# Query recent logs from this instance (adjust instance name to match your config)
+curl -s "http://localhost:3100/loki/api/v1/query?query={instance=%22duadualive-staging%22}&limit=5" | jq .
 
 # Query metrics
-curl -s "http://localhost:9009/prometheus/api/v1/query?query=up{instance=%22laravel-app-1%22}" | jq .
+curl -s "http://localhost:9009/prometheus/api/v1/query?query=up{instance=%22duadualive-staging%22}" | jq .
 
 # Search for recent traces
 curl -s "http://localhost:3200/api/search?limit=5" | jq .
@@ -507,8 +507,8 @@ curl -s "http://localhost:3200/api/search?limit=5" | jq .
 
 Or verify in **Grafana UI** at `http://<LGTM-IP>:3000`:
 
-1. **Explore → Loki** → `{instance="laravel-app-1"}` → should see log entries
-2. **Explore → Mimir** → `up{instance="laravel-app-1"}` → should show `1`
+1. **Explore → Loki** → `{instance="duadualive-staging"}` → should see log entries
+2. **Explore → Mimir** → `up{instance="duadualive-staging"}` → should show `1`
 3. **Explore → Tempo** → Search → should see traces (after OpenTelemetry is configured)
 
 ### 8.5 End-to-End Smoke Test
