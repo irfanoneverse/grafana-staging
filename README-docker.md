@@ -254,9 +254,7 @@ On each Laravel EC2, run as the app user (e.g., `theone`) in the Laravel project
 cd /home/theone/kol
 
 # Core OpenTelemetry SDK + OTLP exporter
-composer require open-telemetry/sdk \
-  open-telemetry/exporter-otlp \
-  open-telemetry/transport-grpc
+composer require open-telemetry/sdk open-telemetry/exporter-otlp
 
 # Laravel auto-instrumentation (recommended)
 composer require keepsuit/laravel-opentelemetry
@@ -295,8 +293,8 @@ EOF
 ### 5.3 Install TraceId Middleware (Log ↔ Trace Correlation)
 
 ```bash
-# Copy the reference middleware
-cp laravel/TraceIdMiddleware.php /var/www/html/app/Http/Middleware/TraceIdMiddleware.php
+# Copy the reference middleware (adjust the destination to your Laravel project path)
+cp laravel/TraceIdMiddleware.php /home/theone/kol/app/Http/Middleware/TraceIdMiddleware.php
 ```
 
 Register it in `bootstrap/app.php` (Laravel 11+):
