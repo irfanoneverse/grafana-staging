@@ -51,7 +51,7 @@ services:
       - /sys:/host/sys:ro
       - /:/host/root:ro
       # Laravel log files (read-only)
-      - /data/laravel/storage/logs:/data/laravel/storage/logs:ro
+      - /data/cips/storage/logs:/data/cips/storage/logs:ro
       # Nginx and PHP-FPM logs (read-only)
       - /var/log/nginx:/var/log/nginx:ro
       - /var/log:/var/log:ro
