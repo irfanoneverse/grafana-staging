@@ -19,7 +19,7 @@
 local.file_match "laravel_logs" {
   path_targets = [
     // Laravel application log — adjust path to your Laravel project
-    { __path__ = "/home/theone/kol/storage/logs/*.log", job = "laravel", app = "laravel" },
+    { __path__ = "/data/laravel/storage/logs/*.log", job = "laravel", app = "laravel" },
     // Nginx access and error logs
     { __path__ = "/var/log/nginx/access.log", job = "nginx", app = "nginx" },
     { __path__ = "/var/log/nginx/error.log",  job = "nginx", app = "nginx" },
@@ -45,7 +45,7 @@ loki.process "laravel_pipeline" {
     values = {
       hostname = env("HOSTNAME"),
       // Change this per instance to identify each Laravel app
-      instance = "laravel-app-1",
+      instance = "games-staging",
     }
   }
 
@@ -68,6 +68,17 @@ loki.process "laravel_pipeline" {
     values = {
       level       = "level",
       environment = "environment",
+    }
+  }
+
+  // Extract log channel from filename (e.g. cxp, maxis, heygames, wallet, moogold, laravel)
+  stage.regex {
+    source     = "filename"
+    expression = ".*/(?P<channel>[a-z_]+)-\\d{4}-\\d{2}-\\d{2}\\.log$"
+  }
+  stage.labels {
+    values = {
+      channel = "channel",
     }
   }
 
@@ -146,7 +157,7 @@ prometheus.relabel "add_instance_labels" {
 
   rule {
     target_label = "instance"
-    replacement  = "laravel-app-1"   // Change per instance
+    replacement  = "games-staging"   // Change per instance
   }
   rule {
     target_label = "environment"
