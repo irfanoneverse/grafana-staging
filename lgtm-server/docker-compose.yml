@@ -100,7 +100,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000" # Grafana UI
+      - "80:3000" # Grafana UI
     depends_on:
       loki:
         condition: service_healthy
