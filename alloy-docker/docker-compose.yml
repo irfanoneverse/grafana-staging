@@ -63,7 +63,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget --no-verbose --tries=1 -O /dev/null http://127.0.0.1:12345/-/ready || exit 1",
+          "curl -f http://127.0.0.1:12345/-/ready || wget -q --spider http://127.0.0.1:12345/-/ready || exit 1",
         ]
       interval: 15s
       timeout: 5s
@@ -97,7 +97,7 @@ services:
     container_name: phpfpm-exporter
     restart: unless-stopped
     environment:
-      - PHP_FPM_SCRAPE_URI=tcp://127.0.0.1:8080/fpm-status
+      - PHP_FPM_SCRAPE_URI=http://127.0.0.1:8080/fpm-status
     network_mode: host
 
 volumes:
