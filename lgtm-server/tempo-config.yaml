@@ -36,7 +36,7 @@ storage:
     backend: s3
     s3:
       endpoint: s3.ap-southeast-1.amazonaws.com # Change to your region
-      bucket: oneone-grafana-bucket
+      bucket: oneone-grafana-prod-bucket
       region: ap-southeast-1 # Change to your region
       # IAM Instance Profile is used — no keys needed.
       prefix: tempotraces

@@ -116,23 +116,23 @@ aws ec2 associate-iam-instance-profile \
 
 You need two security groups:
 
-#### Security Group: `sg-lgtm-server`
+#### Security Group: `ov-aws-grafana`
 
 Applied to the **LGTM EC2 instance**. Allows inbound from the Laravel instances.
 
 | Port | Protocol | Source             | Service         | Purpose                    |
 | ---- | -------- | ------------------ | --------------- | -------------------------- |
-| 3100 | TCP      | `sg-laravel-app`   | Loki HTTP API   | Alloy pushes logs          |
-| 9009 | TCP      | `sg-laravel-app`   | Mimir HTTP API  | Alloy pushes metrics       |
-| 4317 | TCP      | `sg-laravel-app`   | Tempo OTLP gRPC | Alloy pushes traces (gRPC) |
-| 4318 | TCP      | `sg-laravel-app`   | Tempo OTLP HTTP | Alloy pushes traces (HTTP) |
+| 3100 | TCP      | `ov-aws-app`       | Loki HTTP API   | Alloy pushes logs          |
+| 9009 | TCP      | `ov-aws-app`       | Mimir HTTP API  | Alloy pushes metrics       |
+| 4317 | TCP      | `ov-aws-app`       | Tempo OTLP gRPC | Alloy pushes traces (gRPC) |
+| 4318 | TCP      | `ov-aws-app`       | Tempo OTLP HTTP | Alloy pushes traces (HTTP) |
 | 3000 | TCP      | Your IP / VPN CIDR | Grafana UI      | Web dashboard access       |
 | 22   | TCP      | Your IP / VPN CIDR | SSH             | Administration             |
 
 ```bash
 # Create the security group
 LGTM_SG=$(aws ec2 create-security-group \
-  --group-name sg-lgtm-server \
+  --group-name ov-aws-grafana \
   --description "LGTM Observability Stack" \
   --vpc-id vpc-xxxxxxxx \
   --query 'GroupId' --output text)
@@ -165,7 +165,7 @@ aws ec2 authorize-security-group-ingress --group-id $LGTM_SG \
   --protocol tcp --port 22 --cidr YOUR_OFFICE_IP/32
 ```
 
-#### Security Group: `sg-laravel-app`
+#### Security Group: `ov-aws-app`
 
 Applied to all **6 Laravel EC2 instances**. No inbound rules needed from the LGTM server (Alloy pushes, not pulls).
 

@@ -6,7 +6,7 @@
 | Setting         | Value                                                                |
 | --------------- | -------------------------------------------------------------------- |
 | **Bucket type** | General purpose                                                      |
-| **Bucket name** | `lgtm-bucket`                                                        |
+| **Bucket name** | `oneone-grafana-prod-bucket`                                         |
 | **AWS Region**  | `Asia Pacific (Singapore) ap-southeast-1` (or your preferred region) |
 
 3. Block Public Access
@@ -41,8 +41,8 @@ Under **Default encryption**:
 "s3:GetBucketLocation"
 ],
 "Resource": [
-"arn:aws:s3:::lgtm-bucket",
-"arn:aws:s3:::lgtm-bucket/*"
+"arn:aws:s3:::oneone-grafana-prod-bucket",
+"arn:aws:s3:::oneone-grafana-prod-bucket/*"
 ]
 }
 ]
@@ -81,11 +81,11 @@ Under **Default encryption**:
 3. Select the **LGTMServerRole** you created in the previous step.
 4. Click **Update IAM role**.
 
-### 5: Security Group: 'sg-laravel-app'
+### 5: Security Group: 'ov-aws-app'
 
 | Setting                 | Value                                                  |
 | ----------------------- | ------------------------------------------------------ |
-| **Security group name** | `sg-laravel-app`                                       |
+| **Security group name** | `ov-aws-app`                                           |
 | **Description**         | `Security group for Laravel application EC2 instances` |
 | **VPC**                 | Select the VPC where your instances reside             |
 
@@ -101,11 +101,11 @@ Outbound Rules: Keep default (Allow all outbound traffic).
 
 Create Security Group.
 
-### 6: Security Group: 'sg-lgtm-server'
+### 6: Security Group: 'ov-aws-grafana'
 
 | Setting                 | Value                                                              |
 | ----------------------- | ------------------------------------------------------------------ |
-| **Security group name** | `sg-lgtm-server`                                                   |
+| **Security group name** | `ov-aws-grafana`                                                    |
 | **Description**         | `LGTM Observability Stack - allows inbound from Laravel instances` |
 | **VPC**                 | Same VPC as above                                                  |
 
@@ -113,10 +113,10 @@ Inbound Rules:
 
 | Port | Protocol | Source             | Service         | Purpose                    |
 | ---- | -------- | ------------------ | --------------- | -------------------------- |
-| 3100 | TCP      | `sg-laravel-app`   | Loki HTTP API   | Alloy pushes logs          |
-| 9009 | TCP      | `sg-laravel-app`   | Mimir HTTP API  | Alloy pushes metrics       |
-| 4317 | TCP      | `sg-laravel-app`   | Tempo OTLP gRPC | Alloy pushes traces (gRPC) |
-| 4318 | TCP      | `sg-laravel-app`   | Tempo OTLP HTTP | Alloy pushes traces (HTTP) |
+| 3100 | TCP      | `ov-aws-app`       | Loki HTTP API   | Alloy pushes logs          |
+| 9009 | TCP      | `ov-aws-app`       | Mimir HTTP API  | Alloy pushes metrics       |
+| 4317 | TCP      | `ov-aws-app`       | Tempo OTLP gRPC | Alloy pushes traces (gRPC) |
+| 4318 | TCP      | `ov-aws-app`       | Tempo OTLP HTTP | Alloy pushes traces (HTTP) |
 | 3000 | TCP      | Your IP / VPN CIDR | Grafana UI      | Web dashboard access       |
 | 22   | TCP      | Your IP / VPN CIDR | SSH             | Administration             |
 
