@@ -120,6 +120,24 @@ services:
     networks:
       - lgtm
 
+  # ---------------------------------------------------------------------------
+  # Alloy — Hub Self-Monitoring
+  # ---------------------------------------------------------------------------
+  alloy:
+    image: grafana/alloy:v1.6.1
+    container_name: alloy-hub
+    restart: unless-stopped
+    command: run --reload-interval 1m /etc/alloy/config.alloy
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    environment:
+      - HOSTNAME=monitoring-hub
+    networks:
+      - lgtm
+
 volumes:
   loki-data:
   mimir-data:
