@@ -5,7 +5,7 @@
 # on each Laravel EC2 instance.
 #
 # WHAT THIS DOES:
-#   - Runs Alloy in Docker to collect logs, metrics, and traces
+#   - Runs Alloy in Docker to collect logs and metrics
 #   - Leaves your Laravel app (Nginx, PHP-FPM) running natively via systemctl
 #   - If monitoring breaks: `docker compose down` — app is completely unaffected
 #
@@ -17,7 +17,6 @@
 #   - Docker and Docker Compose installed on the Laravel EC2
 #   - Nginx stub_status enabled (port 8080)
 #   - PHP-FPM pm.status_path enabled
-#   - OpenTelemetry packages installed in Laravel (for traces)
 #
 # IMPORTANT: Before running, edit config.alloy to set:
 #   1. LGTM_SERVER_PRIVATE_IP → your LGTM server's private IP
@@ -28,7 +27,7 @@ services:
   # ---------------------------------------------------------------------------
   # Grafana Alloy — Unified Collector Agent
   # ---------------------------------------------------------------------------
-  # Collects logs, system metrics (built-in), and traces from the host.
+  # Collects logs and system metrics from the host.
   # Uses host networking so it can access localhost endpoints.
   # Nginx and PHP-FPM metrics come from lightweight sidecar exporters below.
   # ---------------------------------------------------------------------------
@@ -51,7 +50,7 @@ services:
       - /sys:/host/sys:ro
       - /:/host/root:ro
       # Laravel log files (read-only)
-      - /data/sso-api/storage/logs:/data/sso-api/storage/logs:ro
+      - ${LARAVEL_LOG_DIR:-/home/forge/app/storage/logs}:/var/log/laravel:ro
       # Nginx and PHP-FPM logs (read-only)
       - /var/log/nginx:/var/log/nginx:ro
       - /var/log:/var/log:ro

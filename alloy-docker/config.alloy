@@ -5,7 +5,7 @@
 // It is functionally identical to the systemd version (../alloy/config.alloy),
 // but is deployed via Docker Compose instead of a systemd service.
 //
-// Collects: Logs (→ Loki), Metrics (→ Mimir), Traces (→ Tempo)
+// Collects: Logs (→ Loki), Metrics (→ Mimir)
 //
 // KEY: System metrics are built-in. Nginx & PHP-FPM metrics come from
 //      lightweight sidecar exporters in docker-compose.yml.
@@ -23,7 +23,7 @@
 local.file_match "laravel_logs" {
   path_targets = [
     // Laravel application log (mounted from host)
-    { __path__ = "/data/sso-api/storage/logs/*.log", job = "laravel", app = "laravel" },
+    { __path__ = "/var/log/laravel/*.log", job = "laravel", app = "laravel" },
     // Nginx access and error logs (mounted from host)
     { __path__ = "/var/log/nginx/access.log", job = "nginx", app = "nginx" },
     { __path__ = "/var/log/nginx/error.log",  job = "nginx", app = "nginx" },
@@ -83,16 +83,6 @@ loki.process "laravel_pipeline" {
   stage.labels {
     values = {
       channel = "channel",
-    }
-  }
-
-  // Extract traceId if present (for Loki↔Tempo correlation)
-  stage.regex {
-    expression = "\"traceId\"\\s*:\\s*\"(?P<traceId>[a-f0-9]+)\""
-  }
-  stage.labels {
-    values = {
-      traceId = "traceId",
     }
   }
 
@@ -171,62 +161,5 @@ prometheus.relabel "add_instance_labels" {
 prometheus.remote_write "mimir_endpoint" {
   endpoint {
     url = "http://172.31.27.45:9009/api/v1/push"
-  }
-}
-
-
-// ---------------------------------------------------------------------------
-// 3. TRACES — Receive OTLP from Laravel app and ship to Tempo
-// ---------------------------------------------------------------------------
-
-// OTLP receiver — Laravel sends traces here via the OpenTelemetry PHP extension.
-// Because we use host networking, Laravel can send to localhost:4318 as before.
-// Note: Only traces are routed. Prometheus metrics use the scrape pipeline above.
-otelcol.receiver.otlp "laravel_traces" {
-  grpc {
-    endpoint = "0.0.0.0:4317"
-  }
-  http {
-    endpoint = "0.0.0.0:4318"
-  }
-  output {
-    traces = [otelcol.processor.attributes.default.input]
-  }
-}
-
-// Add resource attributes to all traces for consistent identification
-otelcol.processor.attributes "default" {
-  action {
-    key    = "deployment.environment"
-    value  = "production"
-    action = "upsert"
-  }
-  action {
-    key    = "host.name"
-    value  = env("HOSTNAME")
-    action = "upsert"
-  }
-
-  output {
-    traces = [otelcol.processor.batch.default.input]
-  }
-}
-
-// Batch traces before sending (reduces network calls)
-otelcol.processor.batch "default" {
-  timeout         = "5s"
-  send_batch_size = 1024
-  output {
-    traces = [otelcol.exporter.otlphttp.tempo_endpoint.input]
-  }
-}
-
-// Export traces to central Tempo over OTLP HTTP
-otelcol.exporter.otlphttp "tempo_endpoint" {
-  client {
-    endpoint = "http://172.31.27.45:4318"
-    tls {
-      insecure = true
-    }
   }
 }

@@ -14,7 +14,6 @@ prometheus.scrape "lgtm_services" {
   targets = [
     { __address__ = "loki:3100",  job = "loki" },
     { __address__ = "mimir:9009", job = "mimir" },
-    { __address__ = "tempo:3200", job = "tempo" },
   ]
   forward_to = [prometheus.relabel.hub_labels.receiver]
 }

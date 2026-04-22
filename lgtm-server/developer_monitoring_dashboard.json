@@ -586,7 +586,7 @@
     {
       "id": 18,
       "title": "LGTM Core Services Health",
-      "description": "Are the internal LGTM containers up? Check if Loki, Mimir, or Tempo processes are healthy.",
+      "description": "Are the internal LGTM containers up? Check if Loki and Mimir processes are healthy.",
       "type": "stat",
       "gridPos": { "h": 4, "w": 18, "x": 6, "y": 50 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -600,11 +600,6 @@
           "expr": "sum(up{job=\"mimir\"}) OR on() vector(0)",
           "legendFormat": "MIMIR",
           "refId": "B"
-        },
-        {
-          "expr": "sum(up{job=\"tempo\"}) OR on() vector(0)",
-          "legendFormat": "TEMPO",
-          "refId": "C"
         }
       ],
       "fieldConfig": {
