@@ -49,7 +49,7 @@ loki.process "laravel_pipeline" {
     values = {
       hostname = env("HOSTNAME"),
       // Change this per instance to identify each Laravel app
-      instance = "sso-api-staging",
+      instance = "duadualive-staging",
     }
   }
 
@@ -149,11 +149,11 @@ prometheus.relabel "add_instance_labels" {
 
   rule {
     target_label = "instance"
-    replacement  = "sso-api-staging"   // Change per instance
+    replacement  = "duadualive-staging"   // Change per instance
   }
   rule {
     target_label = "environment"
-    replacement  = "production"
+    replacement  = "staging"
   }
 }
 
