@@ -60,8 +60,8 @@ aws s3api put-bucket-encryption \
 Attach S3 access via EC2 instance profile (no static credentials on disk).
 
 Use one policy file only and keep it aligned with the bucket used in:
-- `lgtm-server/loki-config.yaml`
-- `lgtm-server/mimir-config.yaml`
+- `main-server/loki-config.yaml`
+- `main-server/mimir-config.yaml`
 
 Policy template file:
 - `aws/iam-policy-lgtm-s3.json`
@@ -152,9 +152,9 @@ cd /opt
 sudo mkdir -p lgtm && sudo chown $USER:$USER lgtm
 git clone YOUR_REPOSITORY_URL lgtm
 # example: git clone git@github.com:your-org/your-repo.git lgtm
-# or: scp -r lgtm-server/ user@monitoring-hub:/opt/lgtm/
+# or: scp -r main-server/ user@monitoring-hub:/opt/lgtm/
 
-cd /opt/lgtm/lgtm-server
+cd /opt/lgtm/main-server
 docker compose up -d
 docker compose logs -f --tail=80
 ```
@@ -166,11 +166,11 @@ Before first start, confirm these values are correct in config files:
 
 ### 4.3 Core Hub Files
 
-- `lgtm-server/docker-compose.yml`
-- `lgtm-server/loki-config.yaml`
-- `lgtm-server/mimir-config.yaml`
-- `lgtm-server/alertmanager-fallback-config.yaml`
-- `lgtm-server/grafana/provisioning/datasources/datasources.yaml`
+- `main-server/docker-compose.yml`
+- `main-server/loki-config.yaml`
+- `main-server/mimir-config.yaml`
+- `main-server/alertmanager-fallback-config.yaml`
+- `main-server/grafana/provisioning/datasources/datasources.yaml`
 
 ## 5. Laravel Node Template Handoff
 
