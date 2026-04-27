@@ -23,14 +23,14 @@
 local.file_match "laravel_logs" {
   path_targets = [
     // Laravel application log (mounted from host)
-    { __path__ = "/var/log/laravel/*.log", job = "laravel", app = "laravel" },
+    { __path__ = "/host/logs/laravel/*.log", job = "laravel", app = "laravel" },
     // Nginx access and error logs (mounted from host)
-    { __path__ = "/var/log/nginx/access.log", job = "nginx", app = "nginx" },
-    { __path__ = "/var/log/nginx/error.log",  job = "nginx", app = "nginx" },
+    { __path__ = "/host/logs/nginx/access.log", job = "nginx", app = "nginx" },
+    { __path__ = "/host/logs/nginx/error.log",  job = "nginx", app = "nginx" },
     // PHP-FPM logs (mounted from host)
-    { __path__ = "/var/log/php*-fpm.log", job = "php-fpm", app = "php-fpm" },
+    { __path__ = "/host/logs/system/php*-fpm.log", job = "php-fpm", app = "php-fpm" },
     // Syslog (optional, useful for system-level debugging)
-    { __path__ = "/var/log/syslog", job = "syslog", app = "system" },
+    { __path__ = "/host/logs/system/syslog", job = "syslog", app = "system" },
   ]
 }
 

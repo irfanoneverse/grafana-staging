@@ -50,10 +50,10 @@ services:
       - /sys:/host/sys:ro
       - /:/host/root:ro
       # Laravel log files (read-only)
-      - ${LARAVEL_LOG_DIR:-/home/theone/kol/storage/logs}:/var/log/laravel:ro
+      - ${LARAVEL_LOG_DIR:-/home/theone/kol/storage/logs}:/host/logs/laravel:ro
       # Nginx and PHP-FPM logs (read-only)
-      - /var/log/nginx:/var/log/nginx:ro
-      - /var/log:/var/log:ro
+      - /var/log/nginx:/host/logs/nginx:ro
+      - /var/log:/host/logs/system:ro
       # Persistent storage for Alloy's WAL (Write-Ahead Log)
       - alloy-data:/var/lib/alloy/data
     environment:
