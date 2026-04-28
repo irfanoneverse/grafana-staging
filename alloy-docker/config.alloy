@@ -11,7 +11,7 @@
 //      lightweight sidecar exporters in docker-compose.yml.
 //      Your Laravel app (Nginx, PHP-FPM) keeps running via systemctl as-is.
 //
-// IMPORTANT: Replace 172.31.27.45 with the private IP of your
+// IMPORTANT: Set HUB_IP in alloy-docker/.env to the private IP of your
 //            observability EC2 (e.g., 10.0.1.50).
 // =============================================================================
 
@@ -48,8 +48,7 @@ loki.process "laravel_pipeline" {
   stage.static_labels {
     values = {
       hostname = env("HOSTNAME"),
-      // Change this per instance to identify each Laravel app
-      instance = "kol-staging",
+      instance = env("INSTANCE_NAME"),
     }
   }
 
@@ -64,7 +63,7 @@ loki.process "laravel_pipeline" {
   stage.timestamp {
     source   = "timestamp"
     format   = "2006-01-02 15:04:05"
-    location = "Asia/Kuala_Lumpur"   // UTC+8 — change if your server is in a different timezone
+    location = env("TZ_NAME")
   }
 
   // Promote parsed fields to labels
@@ -75,10 +74,10 @@ loki.process "laravel_pipeline" {
     }
   }
 
-  // Extract log channel from filename (e.g. cxp, maxis, heygames, wallet, moogold, laravel)
+  // Extract log channel from filename (e.g. audit, worker, laravel)
   stage.regex {
     source     = "filename"
-    expression = ".*/(?P<channel>[a-z_]+)-\\d{4}-\\d{2}-\\d{2}\\.log$"
+    expression = ".*/(?P<channel>[a-z0-9_-]+)(?:-\\d{4}-\\d{2}-\\d{2})?\\.log$"
   }
   stage.labels {
     values = {
@@ -92,7 +91,7 @@ loki.process "laravel_pipeline" {
 // Write logs to the central Loki instance
 loki.write "loki_endpoint" {
   endpoint {
-    url = "http://172.31.27.45:3100/loki/api/v1/push"
+    url = "http://" + env("HUB_IP") + ":3100/loki/api/v1/push"
   }
 }
 
@@ -149,17 +148,17 @@ prometheus.relabel "add_instance_labels" {
 
   rule {
     target_label = "instance"
-    replacement  = "kol-staging"   // Change per instance
+    replacement  = env("INSTANCE_NAME")
   }
   rule {
     target_label = "environment"
-    replacement  = "staging"
+    replacement  = env("ENVIRONMENT")
   }
 }
 
 // Remote write metrics to the central Mimir instance
 prometheus.remote_write "mimir_endpoint" {
   endpoint {
-    url = "http://172.31.27.45:9009/api/v1/push"
+    url = "http://" + env("HUB_IP") + ":9009/api/v1/push"
   }
 }

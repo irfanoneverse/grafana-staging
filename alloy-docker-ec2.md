@@ -21,7 +21,7 @@ This guide is the reusable template for each Laravel EC2 node.
 For each Laravel EC2, define these values before deploy:
 
 - `HUB_IP` = monitoring hub private IP (for `3100`, `9009`)
-- `INSTANCE_NAME` = unique node label (example: `api-prod-01`)
+- `INSTANCE_NAME` = unique node label (example: `laravel-app-01`)
 - `ENVIRONMENT` = `production`/`staging`
 - `TZ_NAME` = IANA timezone (example: `Asia/Kuala_Lumpur`)
 - `LARAVEL_LOG_DIR` = Laravel logs directory on that node
@@ -30,17 +30,17 @@ For each Laravel EC2, define these values before deploy:
 Copy and update this block on every Laravel EC2:
 
 ```bash
-export HUB_IP="10.x.x.x"
-export INSTANCE_NAME="api-prod-01"
-export ENVIRONMENT="production"
+export HUB_IP="10.0.1.50"
+export INSTANCE_NAME="laravel-app-01"
+export ENVIRONMENT="staging"
 export TZ_NAME="Asia/Kuala_Lumpur"
-export LARAVEL_LOG_DIR="/home/forge/SITE_NAME/storage/logs"
-export LARAVEL_APP_DIR="/home/forge/SITE_NAME"
+export LARAVEL_LOG_DIR="/path/to/laravel/storage/logs"
+export LARAVEL_APP_DIR="/path/to/laravel"
 ```
 
 Forge note:
 - Many Forge deployments use paths under `/home/forge/SITE_NAME/...`.
-- Do not assume `/data/sso-api/...`; confirm each node path first.
+- Do not assume any application path; confirm each node path first.
 
 Confirm the real paths:
 
@@ -214,78 +214,46 @@ Alternative if you only want to copy agent files:
 scp -r alloy-docker/ ubuntu@LARAVEL_EC2_PRIVATE_IP:/opt/monitoring/
 ```
 
-### 4.2 Update `config.alloy`
+### 4.2 Configure node variables
 
-Edit:
-
-```bash
-nano /opt/monitoring/alloy-docker/config.alloy
-```
-
-Replace values per node:
-- Hub endpoint IP in:
-  - `loki.write` URL
-  - `prometheus.remote_write` URL
-- Instance label:
-  - `loki.process.stage.static_labels.instance`
-  - `prometheus.relabel.rule.replacement`
-- Environment label in relabel rules if needed
-- Timezone in `stage.timestamp.location`
-- Laravel log glob path under `local.file_match "laravel_logs"` if you changed the container mount
-
-For the current `alloy-docker/config.alloy`, these are the main replacements:
-
-```text
-http://172.31.27.45:3100/loki/api/v1/push -> http://HUB_IP:3100/loki/api/v1/push
-http://172.31.27.45:9009/api/v1/push      -> http://HUB_IP:9009/api/v1/push
-instance = "kol-staging"                  -> instance = "INSTANCE_NAME"
-replacement  = "kol-staging"              -> replacement = "INSTANCE_NAME"
-replacement  = "staging"                  -> replacement = "ENVIRONMENT"
-location = "Asia/Kuala_Lumpur"            -> location = "TZ_NAME"
-```
-
-You can use `sed` after reviewing the file:
+Create `.env` from the template:
 
 ```bash
-cp config.alloy config.alloy.bak
-
-sed -i "s#http://172.31.27.45:3100/loki/api/v1/push#http://$HUB_IP:3100/loki/api/v1/push#g" config.alloy
-sed -i "s#http://172.31.27.45:9009/api/v1/push#http://$HUB_IP:9009/api/v1/push#g" config.alloy
-sed -i "s#instance = \"kol-staging\"#instance = \"$INSTANCE_NAME\"#g" config.alloy
-sed -i "s#replacement  = \"kol-staging\"#replacement  = \"$INSTANCE_NAME\"#g" config.alloy
-sed -i "s#replacement  = \"staging\"#replacement  = \"$ENVIRONMENT\"#g" config.alloy
-sed -i "s#location = \"Asia/Kuala_Lumpur\"#location = \"$TZ_NAME\"#g" config.alloy
+cd /opt/monitoring/alloy-docker
+cp .env.example .env
+nano .env
 ```
+
+Set these values for the node:
+
+```env
+HOSTNAME=laravel-app-01
+INSTANCE_NAME=laravel-app-01
+ENVIRONMENT=staging
+TZ_NAME=Asia/Kuala_Lumpur
+LARAVEL_LOG_DIR=/path/to/laravel/storage/logs
+HUB_IP=10.0.1.50
+```
+
+`config.alloy` reads these values from the container environment. You normally should not edit `config.alloy` per node.
 
 Review before starting:
 
 ```bash
-grep -nE "172.31.27.45|kol-staging|staging|location|loki/api|api/v1/push" config.alloy
+cat .env
+grep -nE "env\\(|loki/api|api/v1/push|location" config.alloy
 ```
 
-### 4.3 Update `docker-compose.yml` bind mount path
+### 4.3 Confirm Laravel log mount
 
-Set `LARAVEL_LOG_DIR` to your real host path. Default in `docker-compose.yml` is:
-- host: `/home/theone/kol/storage/logs`
+Set `LARAVEL_LOG_DIR` in `.env` to your real host path. Placeholder in `.env.example` is:
+- host: `/path/to/laravel/storage/logs`
 - container: `/host/logs/laravel`
 
 The current `config.alloy` reads Laravel logs from:
 
 ```text
 /host/logs/laravel/*.log
-```
-
-Use `.env` for per-node values:
-
-```bash
-cd /opt/monitoring/alloy-docker
-
-cat > .env << EOENV
-HOSTNAME=$INSTANCE_NAME
-LARAVEL_LOG_DIR=$LARAVEL_LOG_DIR
-EOENV
-
-cat .env
 ```
 
 Validate the mount source exists:
@@ -344,8 +312,8 @@ From Grafana Explore on the hub:
 Loki queries:
 
 ```logql
-{instance="api-prod-01"}
-{job="laravel", environment="production"}
+{instance="laravel-app-01"}
+{job="laravel", environment="staging"}
 {job="nginx"}
 ```
 
@@ -353,13 +321,13 @@ Mimir/Prometheus queries:
 
 ```promql
 up
-up{instance="api-prod-01"}
-node_uname_info{instance="api-prod-01"}
-nginx_connections_active{instance="api-prod-01"}
-phpfpm_up{instance="api-prod-01"}
+up{instance="laravel-app-01"}
+node_uname_info{instance="laravel-app-01"}
+nginx_connections_active{instance="laravel-app-01"}
+phpfpm_up{instance="laravel-app-01"}
 ```
 
-Replace `api-prod-01` with your `INSTANCE_NAME`.
+Replace `laravel-app-01` with your `INSTANCE_NAME`.
 
 ## 5. Laravel Cleanup
 
