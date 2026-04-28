@@ -21,26 +21,31 @@ This guide is the reusable template for each Laravel EC2 node.
 For each Laravel EC2, define these values before deploy:
 
 - `HUB_IP` = monitoring hub private IP (for `3100`, `9009`)
+- `CLIENT_PRIVATE_IP` = Laravel client EC2 private IP
 - `INSTANCE_NAME` = unique node label (example: `api-prod-01`)
 - `ENVIRONMENT` = `production`/`staging`
 - `TZ_NAME` = IANA timezone (example: `Asia/Kuala_Lumpur`)
 - `LARAVEL_LOG_DIR` = Laravel logs directory on that node
 - `LARAVEL_APP_DIR` = Laravel project root on that node
 
-Copy and update this block on every Laravel EC2:
+For the `sso-api-staging` EC2, use:
 
 ```bash
-export HUB_IP="10.x.x.x"
-export INSTANCE_NAME="api-prod-01"
-export ENVIRONMENT="production"
+export HUB_IP="172.31.27.45"
+export CLIENT_PRIVATE_IP="172.31.2.217"
+export INSTANCE_NAME="sso-api-staging"
+export ENVIRONMENT="staging"
 export TZ_NAME="Asia/Kuala_Lumpur"
-export LARAVEL_LOG_DIR="/home/forge/SITE_NAME/storage/logs"
-export LARAVEL_APP_DIR="/home/forge/SITE_NAME"
+export LARAVEL_LOG_DIR="/data/sso-api/storage/logs"
+export LARAVEL_APP_DIR="/data/sso-api"
 ```
 
-Forge note:
-- Many Forge deployments use paths under `/home/forge/SITE_NAME/...`.
-- Do not assume `/data/sso-api/...`; confirm each node path first.
+Notes:
+- `18.136.17.219` is the public IP for SSH/admin access to `sso-api-staging`.
+- `172.31.2.217` is the private IP of the `sso-api-staging` client EC2.
+- Use the monitoring hub private IP for `HUB_IP` when both EC2 instances are in the same VPC.
+- The repository default currently keeps `HUB_IP=172.31.27.45`; change it if your hub private IP is different.
+- Do not set `HUB_IP` to `172.31.2.217` unless the monitoring hub also runs on this same EC2.
 
 Confirm the real paths:
 
@@ -205,6 +210,8 @@ cd /opt
 sudo mkdir -p monitoring
 sudo chown "$USER:$USER" monitoring
 git clone https://github.com/irfanoneverse/grafana.git monitoring
+cd /opt/monitoring
+git checkout sso-api-staging
 cd /opt/monitoring/alloy-docker
 ```
 
@@ -214,78 +221,39 @@ Alternative if you only want to copy agent files:
 scp -r alloy-docker/ ubuntu@LARAVEL_EC2_PRIVATE_IP:/opt/monitoring/
 ```
 
-### 4.2 Update `config.alloy`
+### 4.2 Create `.env`
 
-Edit:
-
-```bash
-nano /opt/monitoring/alloy-docker/config.alloy
-```
-
-Replace values per node:
-- Hub endpoint IP in:
-  - `loki.write` URL
-  - `prometheus.remote_write` URL
-- Instance label:
-  - `loki.process.stage.static_labels.instance`
-  - `prometheus.relabel.rule.replacement`
-- Environment label in relabel rules if needed
-- Timezone in `stage.timestamp.location`
-- Laravel log glob path under `local.file_match "laravel_logs"` if you changed the container mount
-
-For the current `alloy-docker/config.alloy`, these are the main replacements:
-
-```text
-http://172.31.27.45:3100/loki/api/v1/push -> http://HUB_IP:3100/loki/api/v1/push
-http://172.31.27.45:9009/api/v1/push      -> http://HUB_IP:9009/api/v1/push
-instance = "kol-staging"                  -> instance = "INSTANCE_NAME"
-replacement  = "kol-staging"              -> replacement = "INSTANCE_NAME"
-replacement  = "staging"                  -> replacement = "ENVIRONMENT"
-location = "Asia/Kuala_Lumpur"            -> location = "TZ_NAME"
-```
-
-You can use `sed` after reviewing the file:
+The checked-in defaults are already for `sso-api-staging`. Create the runtime `.env` file:
 
 ```bash
-cp config.alloy config.alloy.bak
-
-sed -i "s#http://172.31.27.45:3100/loki/api/v1/push#http://$HUB_IP:3100/loki/api/v1/push#g" config.alloy
-sed -i "s#http://172.31.27.45:9009/api/v1/push#http://$HUB_IP:9009/api/v1/push#g" config.alloy
-sed -i "s#instance = \"kol-staging\"#instance = \"$INSTANCE_NAME\"#g" config.alloy
-sed -i "s#replacement  = \"kol-staging\"#replacement  = \"$INSTANCE_NAME\"#g" config.alloy
-sed -i "s#replacement  = \"staging\"#replacement  = \"$ENVIRONMENT\"#g" config.alloy
-sed -i "s#location = \"Asia/Kuala_Lumpur\"#location = \"$TZ_NAME\"#g" config.alloy
+cd /opt/monitoring/alloy-docker
+cp .env.example .env
+nano .env
 ```
 
-Review before starting:
+Confirm these values:
 
-```bash
-grep -nE "172.31.27.45|kol-staging|staging|location|loki/api|api/v1/push" config.alloy
+```env
+HOSTNAME=sso-api-staging
+INSTANCE_NAME=sso-api-staging
+ENVIRONMENT=staging
+TZ_NAME=Asia/Kuala_Lumpur
+LARAVEL_LOG_DIR=/data/sso-api/storage/logs
+HUB_IP=172.31.27.45
 ```
 
-### 4.3 Update `docker-compose.yml` bind mount path
+Change only `HUB_IP` if your monitoring hub private IP is not `172.31.27.45`.
 
-Set `LARAVEL_LOG_DIR` to your real host path. Default in `docker-compose.yml` is:
-- host: `/home/theone/kol/storage/logs`
-- container: `/host/logs/laravel`
-
-The current `config.alloy` reads Laravel logs from:
+The current `config.alloy` reads Laravel logs from the container path:
 
 ```text
 /host/logs/laravel/*.log
 ```
 
-Use `.env` for per-node values:
+`docker-compose.yml` maps your host path into that container path:
 
-```bash
-cd /opt/monitoring/alloy-docker
-
-cat > .env << EOENV
-HOSTNAME=$INSTANCE_NAME
-LARAVEL_LOG_DIR=$LARAVEL_LOG_DIR
-EOENV
-
-cat .env
+```text
+/data/sso-api/storage/logs -> /host/logs/laravel
 ```
 
 Validate the mount source exists:
@@ -294,7 +262,7 @@ Validate the mount source exists:
 test -d "$LARAVEL_LOG_DIR" && ls -lah "$LARAVEL_LOG_DIR" | head
 ```
 
-### 4.4 Start stack
+### 4.3 Start stack
 
 ```bash
 cd /opt/monitoring/alloy-docker
@@ -308,7 +276,7 @@ Expected containers:
 - `nginx-exporter`
 - `phpfpm-exporter`
 
-### 4.5 Verify Alloy UI and exporters
+### 4.4 Verify Alloy UI and exporters
 
 ```bash
 curl -s http://127.0.0.1:12345/ | head -1
@@ -330,7 +298,7 @@ docker compose logs --tail=80 nginx-exporter
 curl -s http://127.0.0.1:8080/nginx_status
 ```
 
-### 4.6 Verify Data on Monitoring Hub
+### 4.5 Verify Data on Monitoring Hub
 
 From the Laravel node, confirm the hub ports are reachable:
 
@@ -344,8 +312,8 @@ From Grafana Explore on the hub:
 Loki queries:
 
 ```logql
-{instance="api-prod-01"}
-{job="laravel", environment="production"}
+{instance="sso-api-staging"}
+{job="laravel", environment="staging"}
 {job="nginx"}
 ```
 
@@ -353,13 +321,13 @@ Mimir/Prometheus queries:
 
 ```promql
 up
-up{instance="api-prod-01"}
-node_uname_info{instance="api-prod-01"}
-nginx_connections_active{instance="api-prod-01"}
-phpfpm_up{instance="api-prod-01"}
+up{instance="sso-api-staging"}
+node_uname_info{instance="sso-api-staging"}
+nginx_connections_active{instance="sso-api-staging"}
+phpfpm_up{instance="sso-api-staging"}
 ```
 
-Replace `api-prod-01` with your `INSTANCE_NAME`.
+Replace `sso-api-staging` with your `INSTANCE_NAME` for other nodes.
 
 ## 5. Laravel Cleanup
 

@@ -18,9 +18,9 @@
 #   - Nginx stub_status enabled (port 8080)
 #   - PHP-FPM pm.status_path enabled
 #
-# IMPORTANT: Before running, edit config.alloy to set:
-#   1. LGTM_SERVER_PRIVATE_IP → your LGTM server's private IP
-#   2. instance = "laravel-app-1" → unique name per EC2
+# IMPORTANT: Before running, create .env from .env.example and set:
+#   1. HUB_IP → your monitoring hub private IP
+#   2. INSTANCE_NAME → unique name per EC2
 # =============================================================================
 
 services:
@@ -50,19 +50,23 @@ services:
       - /sys:/host/sys:ro
       - /:/host/root:ro
       # Laravel log files (read-only)
-      - ${LARAVEL_LOG_DIR:-/home/theone/kol/storage/logs}:/host/logs/laravel:ro
+      - ${LARAVEL_LOG_DIR:-/data/sso-api/storage/logs}:/host/logs/laravel:ro
       # Nginx and PHP-FPM logs (read-only)
       - /var/log/nginx:/host/logs/nginx:ro
       - /var/log:/host/logs/system:ro
       # Persistent storage for Alloy's WAL (Write-Ahead Log)
       - alloy-data:/var/lib/alloy/data
     environment:
-      - HOSTNAME=${HOSTNAME:-laravel-app}
+      - HOSTNAME=${HOSTNAME:-sso-api-staging}
+      - INSTANCE_NAME=${INSTANCE_NAME:-sso-api-staging}
+      - ENVIRONMENT=${ENVIRONMENT:-staging}
+      - TZ_NAME=${TZ_NAME:-Asia/Kuala_Lumpur}
+      - HUB_IP=${HUB_IP:-172.31.27.45}
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "grep -q ':3039' /proc/net/tcp6 || exit 1",
+          "grep -q ':3039' /proc/net/tcp /proc/net/tcp6 || exit 1",
         ]
       interval: 15s
       timeout: 5s
