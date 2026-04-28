@@ -27,9 +27,29 @@ For each Laravel EC2, define these values before deploy:
 - `LARAVEL_LOG_DIR` = Laravel logs directory on that node
 - `LARAVEL_APP_DIR` = Laravel project root on that node
 
+Copy and update this block on every Laravel EC2:
+
+```bash
+export HUB_IP="10.x.x.x"
+export INSTANCE_NAME="api-prod-01"
+export ENVIRONMENT="production"
+export TZ_NAME="Asia/Kuala_Lumpur"
+export LARAVEL_LOG_DIR="/home/forge/SITE_NAME/storage/logs"
+export LARAVEL_APP_DIR="/home/forge/SITE_NAME"
+```
+
 Forge note:
 - Many Forge deployments use paths under `/home/forge/SITE_NAME/...`.
 - Do not assume `/data/sso-api/...`; confirm each node path first.
+
+Confirm the real paths:
+
+```bash
+ls -lah "$LARAVEL_APP_DIR"
+ls -lah "$LARAVEL_LOG_DIR"
+ls -lah /var/log/nginx
+ls -lah /var/log | grep fpm
+```
 
 ## 2. Prerequisites
 
@@ -37,16 +57,35 @@ From [aws-setup-docker-monitoringhub.md](aws-setup-docker-monitoringhub.md), ens
 - Hub is healthy (`docker compose up -d` completed on hub)
 - Hub SG allows inbound from app SG on `3100`, `9009`
 - App node has outbound access to hub
+- You know the hub private IP or private DNS name
+
+Check network access from the Laravel EC2:
+
+```bash
+nc -vz "$HUB_IP" 3100
+nc -vz "$HUB_IP" 9009
+```
+
+If `nc` is not installed:
+
+```bash
+sudo apt update
+sudo apt install -y netcat-openbsd
+```
 
 Install Docker on each Laravel EC2:
 
 ```bash
-sudo apt update && sudo apt upgrade -y
+sudo apt update
+sudo apt upgrade -y
 curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-sudo apt install -y docker-compose-plugin
+sudo usermod -aG docker "$USER"
+sudo apt install -y docker-compose-plugin git
+```
 
-# re-login
+Log out and log back in so the `docker` group applies:
+
+```bash
 exit
 ```
 
@@ -60,19 +99,54 @@ docker run --rm hello-world
 
 ## 3. Enable Host Status Endpoints
 
+Alloy scrapes metrics from local exporters. The exporters need local Nginx and PHP-FPM status endpoints.
+
 ### 3.1 Enable PHP-FPM status path
+
+Find the active PHP-FPM pool:
+
+```bash
+ls -lah /etc/php/*/fpm/pool.d/www.conf
+grep -R "listen =" /etc/php/*/fpm/pool.d/www.conf
+```
+
+Enable `pm.status_path`:
 
 ```bash
 sudo sed -i 's#^;*pm.status_path = .*#pm.status_path = /fpm-status#' /etc/php/*/fpm/pool.d/www.conf
 sudo systemctl restart php*-fpm
 ```
 
+Confirm PHP-FPM is running:
+
+```bash
+systemctl --no-pager --type=service | grep php | grep fpm
+ls -lah /run/php/
+```
+
 ### 3.2 Add Nginx status server (`:8080`)
+
+Check the active PHP-FPM socket:
 
 ```bash
 ls /run/php/
+```
 
-sudo tee /etc/nginx/conf.d/stub_status.conf > /dev/null << 'EONGINX'
+Common examples:
+- `/run/php/php8.2-fpm.sock`
+- `/run/php/php8.3-fpm.sock`
+- `/run/php/php-fpm.sock`
+
+Set the socket path:
+
+```bash
+export PHP_FPM_SOCK="/run/php/php8.2-fpm.sock"
+```
+
+Create the local-only Nginx status server:
+
+```bash
+sudo tee /etc/nginx/conf.d/stub_status.conf > /dev/null << EONGINX
 server {
     listen 8080;
     server_name localhost;
@@ -84,20 +158,23 @@ server {
     }
 
     location = /fpm-status {
-        fastcgi_pass unix:/run/php/php-fpm.sock;    # adjust if needed
+        fastcgi_pass unix:$PHP_FPM_SOCK;
         fastcgi_param SCRIPT_NAME     /fpm-status;
         fastcgi_param SCRIPT_FILENAME /fpm-status.php;
         fastcgi_param REQUEST_URI     /fpm-status;
-        fastcgi_param QUERY_STRING    $query_string;
-        fastcgi_param REQUEST_METHOD  $request_method;
+        fastcgi_param QUERY_STRING    \$query_string;
+        fastcgi_param REQUEST_METHOD  \$request_method;
         allow 127.0.0.1;
         deny all;
     }
 }
 EONGINX
 
-sudo nginx -t && sudo systemctl reload nginx
+sudo nginx -t
+sudo systemctl reload nginx
 ```
+
+This server listens only on port `8080` and only allows `127.0.0.1`. It is for local metrics scraping, not public access.
 
 ### 3.3 Verify endpoints
 
@@ -106,19 +183,35 @@ curl -s http://127.0.0.1:8080/nginx_status
 curl -s http://127.0.0.1:8080/fpm-status
 ```
 
+Expected:
+- `nginx_status` returns active connections and request counters.
+- `fpm-status` returns PHP-FPM pool/process status.
+
+If `fpm-status` returns `502`, the socket path in `/etc/nginx/conf.d/stub_status.conf` is wrong. Update `fastcgi_pass`, then run:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
 ## 4. Deploy Agent Stack
 
 ### 4.1 Copy files to node
 
+Clone the repository:
+
 ```bash
 cd /opt
-sudo mkdir -p monitoring && sudo chown $USER:$USER monitoring
-git clone YOUR_REPOSITORY_URL monitoring
-# example: git clone git@github.com:your-org/your-repo.git monitoring
-# Alternative: if you copy only agent files:
-# scp -r alloy-docker/ user@laravel-ec2:/opt/monitoring/
-
+sudo mkdir -p monitoring
+sudo chown "$USER:$USER" monitoring
+git clone https://github.com/irfanoneverse/grafana.git monitoring
 cd /opt/monitoring/alloy-docker
+```
+
+Alternative if you only want to copy agent files:
+
+```bash
+scp -r alloy-docker/ ubuntu@LARAVEL_EC2_PRIVATE_IP:/opt/monitoring/
 ```
 
 ### 4.2 Update `config.alloy`
@@ -138,27 +231,68 @@ Replace values per node:
   - `prometheus.relabel.rule.replacement`
 - Environment label in relabel rules if needed
 - Timezone in `stage.timestamp.location`
-- Laravel log glob path under `local.file_match "laravel_logs"`
+- Laravel log glob path under `local.file_match "laravel_logs"` if you changed the container mount
+
+For the current `alloy-docker/config.alloy`, these are the main replacements:
+
+```text
+http://172.31.27.45:3100/loki/api/v1/push -> http://HUB_IP:3100/loki/api/v1/push
+http://172.31.27.45:9009/api/v1/push      -> http://HUB_IP:9009/api/v1/push
+instance = "kol-staging"                  -> instance = "INSTANCE_NAME"
+replacement  = "kol-staging"              -> replacement = "INSTANCE_NAME"
+replacement  = "staging"                  -> replacement = "ENVIRONMENT"
+location = "Asia/Kuala_Lumpur"            -> location = "TZ_NAME"
+```
+
+You can use `sed` after reviewing the file:
+
+```bash
+cp config.alloy config.alloy.bak
+
+sed -i "s#http://172.31.27.45:3100/loki/api/v1/push#http://$HUB_IP:3100/loki/api/v1/push#g" config.alloy
+sed -i "s#http://172.31.27.45:9009/api/v1/push#http://$HUB_IP:9009/api/v1/push#g" config.alloy
+sed -i "s#instance = \"kol-staging\"#instance = \"$INSTANCE_NAME\"#g" config.alloy
+sed -i "s#replacement  = \"kol-staging\"#replacement  = \"$INSTANCE_NAME\"#g" config.alloy
+sed -i "s#replacement  = \"staging\"#replacement  = \"$ENVIRONMENT\"#g" config.alloy
+sed -i "s#location = \"Asia/Kuala_Lumpur\"#location = \"$TZ_NAME\"#g" config.alloy
+```
+
+Review before starting:
+
+```bash
+grep -nE "172.31.27.45|kol-staging|staging|location|loki/api|api/v1/push" config.alloy
+```
 
 ### 4.3 Update `docker-compose.yml` bind mount path
 
-Set `LARAVEL_LOG_DIR` to your real host path. Default is Forge-style:
-- `/home/forge/app/storage/logs` on host -> `/var/log/laravel` in container
+Set `LARAVEL_LOG_DIR` to your real host path. Default in `docker-compose.yml` is:
+- host: `/home/theone/kol/storage/logs`
+- container: `/host/logs/laravel`
 
-Ensure `config.alloy` keeps the log glob as:
-- `__path__ = "/var/log/laravel/*.log"`
+The current `config.alloy` reads Laravel logs from:
+
+```text
+/host/logs/laravel/*.log
+```
 
 Use `.env` for per-node values:
 
 ```bash
 cd /opt/monitoring/alloy-docker
-cp .env.example .env
-nano .env
+
+cat > .env << EOENV
+HOSTNAME=$INSTANCE_NAME
+LARAVEL_LOG_DIR=$LARAVEL_LOG_DIR
+EOENV
+
+cat .env
 ```
 
-Set:
-- `HOSTNAME=<INSTANCE_NAME>`
-- `LARAVEL_LOG_DIR=/home/forge/<SITE_NAME>/storage/logs`
+Validate the mount source exists:
+
+```bash
+test -d "$LARAVEL_LOG_DIR" && ls -lah "$LARAVEL_LOG_DIR" | head
+```
 
 ### 4.4 Start stack
 
@@ -166,7 +300,7 @@ Set:
 cd /opt/monitoring/alloy-docker
 docker compose up -d
 docker compose ps
-docker compose logs -f --tail=80
+docker compose logs --tail=80 alloy
 ```
 
 Expected containers:
@@ -186,14 +320,55 @@ If `phpfpm-exporter` has no metrics, check its scrape URI format and container l
 
 ```bash
 docker compose logs --tail=80 phpfpm-exporter
+curl -s http://127.0.0.1:8080/fpm-status
 ```
 
+If `nginx-exporter` has no metrics:
+
+```bash
+docker compose logs --tail=80 nginx-exporter
+curl -s http://127.0.0.1:8080/nginx_status
+```
+
+### 4.6 Verify Data on Monitoring Hub
+
+From the Laravel node, confirm the hub ports are reachable:
+
+```bash
+nc -vz "$HUB_IP" 3100
+nc -vz "$HUB_IP" 9009
+```
+
+From Grafana Explore on the hub:
+
+Loki queries:
+
+```logql
+{instance="api-prod-01"}
+{job="laravel", environment="production"}
+{job="nginx"}
+```
+
+Mimir/Prometheus queries:
+
+```promql
+up
+up{instance="api-prod-01"}
+node_uname_info{instance="api-prod-01"}
+nginx_connections_active{instance="api-prod-01"}
+phpfpm_up{instance="api-prod-01"}
+```
+
+Replace `api-prod-01` with your `INSTANCE_NAME`.
+
 ## 5. Laravel Cleanup
+
+Run this only if the Laravel app previously used OpenTelemetry packages and you are replacing that setup with Alloy-based logs/metrics collection.
 
 Run inside Laravel app directory (`LARAVEL_APP_DIR`):
 
 ```bash
-cd /path/to/laravel-app
+cd "$LARAVEL_APP_DIR"
 composer remove keepsuit/laravel-opentelemetry open-telemetry/sdk open-telemetry/exporter-otlp
 ```
 
@@ -208,6 +383,8 @@ Then remove any leftover package integration from the Laravel app:
 php artisan optimize:clear
 ```
 
+If `composer remove` says a package is not installed, continue with the manual cleanup checks.
+
 ## 6. Validation Checklist
 
 Per Laravel node:
@@ -216,11 +393,25 @@ Per Laravel node:
 - `docker compose ps` shows agent stack running
 - `http://127.0.0.1:12345/` responds (Alloy UI)
 - `:9113/metrics` and `:9253/metrics` respond
-- Alloy logs show successful remote writes to hub
+- Alloy logs show no repeated remote write errors
+- Laravel log directory is mounted read-only into the Alloy container
 
 From monitoring hub:
 - Loki query shows node logs (`instance="INSTANCE_NAME"`)
-- Mimir query shows node metrics (`up`/node or exporter jobs)
+- Mimir query shows node metrics (`up`, `node_uname_info`, `nginx_*`, `phpfpm_*`)
+- Grafana Explore can query both Loki and Mimir datasources
+
+Fast local validation command:
+
+```bash
+cd /opt/monitoring/alloy-docker
+docker compose ps
+curl -s http://127.0.0.1:8080/nginx_status | head
+curl -s http://127.0.0.1:8080/fpm-status | head
+curl -s http://127.0.0.1:9113/metrics | head
+curl -s http://127.0.0.1:9253/metrics | head
+docker compose logs --tail=80 alloy
+```
 
 ## 7. Operations
 
@@ -230,6 +421,8 @@ Common commands:
 cd /opt/monitoring/alloy-docker
 docker compose ps
 docker compose logs -f alloy
+docker compose logs -f nginx-exporter
+docker compose logs -f phpfpm-exporter
 docker compose restart alloy
 docker compose down
 docker compose up -d
@@ -238,9 +431,19 @@ docker compose up -d
 Update config:
 
 ```bash
-nano /opt/monitoring/alloy-docker/config.alloy
+cd /opt/monitoring/alloy-docker
+nano config.alloy
 docker compose restart alloy
 docker compose logs --tail=50 alloy
+```
+
+Update Docker images:
+
+```bash
+cd /opt/monitoring/alloy-docker
+docker compose pull
+docker compose up -d
+docker image prune -f
 ```
 
 If migrating from systemd Alloy:
@@ -250,3 +453,12 @@ sudo systemctl stop alloy
 sudo systemctl disable alloy
 sudo systemctl status alloy
 ```
+
+Rollback the Docker agent only:
+
+```bash
+cd /opt/monitoring/alloy-docker
+docker compose down
+```
+
+This stops the monitoring agent containers only. It does not stop Nginx, PHP-FPM, Laravel, or the application database.
