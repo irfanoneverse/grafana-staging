@@ -38,6 +38,18 @@ export LARAVEL_LOG_DIR="/home/forge/SITE_NAME/storage/logs"
 export LARAVEL_APP_DIR="/home/forge/SITE_NAME"
 ```
 
+Current `kol-staging` node:
+
+```bash
+export CLIENT_PUBLIC_IP="13.251.83.83"
+export CLIENT_PRIVATE_IP="172.31.23.60"
+export INSTANCE_NAME="kol-staging"
+export ENVIRONMENT="staging"
+export TZ_NAME="Asia/Kuala_Lumpur"
+export LARAVEL_LOG_DIR="/home/theone/kol/storage/logs"
+export LARAVEL_APP_DIR="/home/theone/kol"
+```
+
 Forge note:
 - Many Forge deployments use paths under `/home/forge/SITE_NAME/...`.
 - Do not assume `/data/sso-api/...`; confirm each node path first.
@@ -198,7 +210,7 @@ sudo systemctl reload nginx
 
 ### 4.1 Copy files to node
 
-Clone the repository:
+Clone the repository on `kol-staging` (`13.251.83.83` public, `172.31.23.60` private):
 
 ```bash
 cd /opt
@@ -233,34 +245,27 @@ Replace values per node:
 - Timezone in `stage.timestamp.location`
 - Laravel log glob path under `local.file_match "laravel_logs"` if you changed the container mount
 
-For the current `alloy-docker/config.alloy`, these are the main replacements:
+The current `alloy-docker/config.alloy` reads these values from the container environment:
 
 ```text
-http://172.31.27.45:3100/loki/api/v1/push -> http://HUB_IP:3100/loki/api/v1/push
-http://172.31.27.45:9009/api/v1/push      -> http://HUB_IP:9009/api/v1/push
-instance = "kol-staging"                  -> instance = "INSTANCE_NAME"
-replacement  = "kol-staging"              -> replacement = "INSTANCE_NAME"
-replacement  = "staging"                  -> replacement = "ENVIRONMENT"
-location = "Asia/Kuala_Lumpur"            -> location = "TZ_NAME"
+HUB_IP
+INSTANCE_NAME
+ENVIRONMENT
+TZ_NAME
 ```
 
-You can use `sed` after reviewing the file:
+For `kol-staging`, use `.env.example` as the starting point:
 
 ```bash
-cp config.alloy config.alloy.bak
-
-sed -i "s#http://172.31.27.45:3100/loki/api/v1/push#http://$HUB_IP:3100/loki/api/v1/push#g" config.alloy
-sed -i "s#http://172.31.27.45:9009/api/v1/push#http://$HUB_IP:9009/api/v1/push#g" config.alloy
-sed -i "s#instance = \"kol-staging\"#instance = \"$INSTANCE_NAME\"#g" config.alloy
-sed -i "s#replacement  = \"kol-staging\"#replacement  = \"$INSTANCE_NAME\"#g" config.alloy
-sed -i "s#replacement  = \"staging\"#replacement  = \"$ENVIRONMENT\"#g" config.alloy
-sed -i "s#location = \"Asia/Kuala_Lumpur\"#location = \"$TZ_NAME\"#g" config.alloy
+cp .env.example .env
+nano .env
 ```
 
 Review before starting:
 
 ```bash
-grep -nE "172.31.27.45|kol-staging|staging|location|loki/api|api/v1/push" config.alloy
+cat .env
+grep -nE "env\\(|loki/api|api/v1/push|location" config.alloy
 ```
 
 ### 4.3 Update `docker-compose.yml` bind mount path
@@ -280,10 +285,7 @@ Use `.env` for per-node values:
 ```bash
 cd /opt/monitoring/alloy-docker
 
-cat > .env << EOENV
-HOSTNAME=$INSTANCE_NAME
-LARAVEL_LOG_DIR=$LARAVEL_LOG_DIR
-EOENV
+cp .env.example .env
 
 cat .env
 ```
@@ -344,8 +346,8 @@ From Grafana Explore on the hub:
 Loki queries:
 
 ```logql
-{instance="api-prod-01"}
-{job="laravel", environment="production"}
+{instance="kol-staging"}
+{job="laravel", environment="staging"}
 {job="nginx"}
 ```
 
@@ -353,13 +355,13 @@ Mimir/Prometheus queries:
 
 ```promql
 up
-up{instance="api-prod-01"}
-node_uname_info{instance="api-prod-01"}
-nginx_connections_active{instance="api-prod-01"}
-phpfpm_up{instance="api-prod-01"}
+up{instance="kol-staging"}
+node_uname_info{instance="kol-staging"}
+nginx_connections_active{instance="kol-staging"}
+phpfpm_up{instance="kol-staging"}
 ```
 
-Replace `api-prod-01` with your `INSTANCE_NAME`.
+Replace `kol-staging` with your `INSTANCE_NAME` when adapting this branch for another node.
 
 ## 5. Laravel Cleanup
 
